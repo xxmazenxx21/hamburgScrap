@@ -10,7 +10,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import os
 
 # Configuration
-BASE_URL = "https://homborg.nl/en/stock/generators-new?page=5"
+BASE_URL = "https://homborg.nl/voorraad/generatoren-nieuw"
 OUTPUT_FILE = "generators_data.json"
 WAIT_TIME = 10
 
@@ -101,6 +101,20 @@ class GeneratorScraper:
                 description = None
             except Exception as e:
                 print(f"Error extracting description: {e}")
+
+            # Extract video URL
+            video_url = None
+            try:
+                video_div = self.driver.find_element(By.CSS_SELECTOR, "div.video")
+                iframe = video_div.find_element(By.CSS_SELECTOR, "iframe.youtubeframe")
+                video_url = iframe.get_attribute("src")
+            except NoSuchElementException:
+                video_url = None
+            except Exception as e:
+                print(f"Error extracting video: {e}")
+            
+            # Add video URL to details
+            details["vediourl"] = video_url
 
             return {
                 "details": details,
@@ -216,18 +230,30 @@ class GeneratorScraper:
                             continue
 
                     # Check for next page - look for it on the current listing page
+                    next_url = None
                     try:
                         # Go back to the listing page to find next button
                         self.driver.get(current_url)
-                        time.sleep(2)
+                        time.sleep(3)
                         self.wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.vehicle")))
+                        time.sleep(1)
                         
-                        next_button = self.driver.find_element(By.CSS_SELECTOR, "li.next a")
-                        current_url = next_button.get_attribute("href")
-                        print(f"\n>>> Moving to next page")
-                        page_num += 1
-                    except NoSuchElementException:
-                        print("\n>>> No more pages to scrape")
+                        # Try to find next button
+                        try:
+                            next_button = self.driver.find_element(By.CSS_SELECTOR, "li.next a")
+                            next_url = next_button.get_attribute("href")
+                        except NoSuchElementException:
+                            next_url = None
+                        
+                        if next_url:
+                            print(f"\n>>> Moving to next page")
+                            page_num += 1
+                            current_url = next_url
+                        else:
+                            print("\n>>> No more pages to scrape")
+                            current_url = None
+                    except Exception as e:
+                        print(f"Error checking for next page: {e}")
                         current_url = None
 
                 except TimeoutException:
